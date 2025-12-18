@@ -1,0 +1,127 @@
+name: Build LibHeif Native Nuget
+
+on:
+  workflow_dispatch:
+
+jobs:
+  get-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.tag }}
+    steps:
+      - id: v
+        run: |
+          TAG=$(curl -s https://api.github.com/repos/strukturag/libheif/releases/latest | jq -r .tag_name)
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+  build:
+    needs: get-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows, arch: x64, runner: windows-2022 }
+          - { os: windows, arch: arm64, runner: windows-2022 }
+          - { os: linux, arch: x64, runner: ubuntu-24.04 }
+          - { os: linux, arch: arm64, runner: ubuntu-24.04 }
+          - { os: osx, arch: x64, runner: macos-13 }
+          - { os: osx, arch: arm64, runner: macos-14 }
+          - { os: ios, arch: arm64, runner: macos-14 }
+          - { os: ios, arch: x64, runner: macos-14 }
+          - { os: maccatalyst, arch: arm64, runner: macos-14 }
+          - { os: maccatalyst, arch: x64, runner: macos-14 }
+          - { os: android, arch: arm64, runner: ubuntu-24.04 }
+          - { os: android, arch: x64, runner: ubuntu-24.04 }
+          - { os: browser-wasm, arch: wasm, runner: ubuntu-24.04 }
+
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Checkout Source Code
+        run: |
+          git clone --depth 1 --branch ${{ needs.get-version.outputs.version }} https://github.com/strukturag/libheif.git libheif
+          git clone --depth 1 --branch v1.0.15 https://github.com/strukturag/libde265.git libde265
+          git clone --depth 1 --branch 1.4.1 https://code.videolan.org/videolan/dav1d.git dav1d
+
+      - name: Setup Environment (Linux/Android)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake meson ninja-build nasm gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Setup Environment (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          pip install meson ninja
+          choco install nasm
+
+      - name: Setup Environment (WASM)
+        if: matrix.os == 'browser-wasm'
+        uses: mymindstorm/setup-emsdk@v14
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build with C# Driver
+        run: dotnet run --project BuildDriver/BuildDriver.csproj -- ${{ matrix.os }} ${{ matrix.arch }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-${{ matrix.arch }}
+          path: artifacts/
+
+  pack-nuget:
+    needs: [build, get-version]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts_raw
+
+      - name: Organize Artifacts
+        shell: pwsh
+        run: |
+          # 创建统一的 artifacts 目录结构供 nuspec 使用
+          New-Item -ItemType Directory -Force -Path artifacts
+          
+          # 遍历所有下载的目录并移动到对应的结构中
+          # artifacts_raw/windows-x64/windows-x64/bin/... -> artifacts/windows-x64/bin/...
+          Get-ChildItem artifacts_raw | ForEach-Object {
+              $dirName = $_.Name
+              Write-Host "Processing $dirName..."
+              $targetDir = Join-Path "artifacts" $dirName
+              if (-not (Test-Path $targetDir)) { New-Item -ItemType Directory -Force -Path $targetDir }
+              
+              # 移动内容
+              Copy-Item -Path "artifacts_raw/$dirName/*" -Destination $targetDir -Recurse -Force
+          }
+          
+          # 检查关键文件是否存在 (调试用)
+          Test-Path "artifacts/windows-x64/bin/heif.dll"
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v1
+
+      - name: Pack NuGet Package
+        shell: pwsh
+        run: |
+          # 移除版本号中的 'v' 前缀 (如 v1.17.6 -> 1.17.6)
+          $CleanVersion = "${{ needs.get-version.outputs.version }}".Replace("v", "")
+          
+          nuget pack nuget/LibHeif.Native.nuspec `
+            -Version $CleanVersion `
+            -Properties "version=$CleanVersion" `
+            -OutputDirectory .
+
+      - name: Upload Final Nuget
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibHeif.Native.${{ needs.get-version.outputs.version }}.nupkg
+          path: "*.nupkg"
