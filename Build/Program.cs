@@ -93,7 +93,7 @@ class Program
             ("maccatalyst", "x64") => Path.Combine(RootDir, "tools/dav1d/package/crossfiles/x86_64-maccatalyst.meson"),
             ("android", "arm64") => Path.Combine(srcDir, "package/crossfiles/aarch64-android.meson"),
             ("android", "x64") => Path.Combine(srcDir, "package/crossfiles/x86_64-android.meson"),
-            ("browser", "wasm") => Path.Combine(srcDir, "package/crossfiles/wasm32.meson"),
+            ("browser", "wasm") => Path.Combine(RootDir, "tools/dav1d/package/crossfiles/wasm32.meson"),
             (_, _) => null
         };
         if (crossFilePath is not null)
