@@ -1,0 +1,9 @@
+This NuGet package bundles the following open-source components:
+
+1. libheif (https://github.com/strukturag/libheif)
+2. libde265 (https://github.com/strukturag/libde265)
+3. dav1d (https://code.videolan.org/videolan/dav1d)
+
+For full license details of each component, see the accompanying THIRD-PARTY-NOTICES.txt file.
+
+The build scripts and packaging code in this repository are licensed under [MIT].

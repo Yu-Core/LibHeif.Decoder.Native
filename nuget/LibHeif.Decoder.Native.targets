@@ -1,0 +1,32 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	<PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+		<!-- 允许的最高 .NET 版本（clamp 上限） -->
+		<_MaxSupportedNetVersion>9.0</_MaxSupportedNetVersion>
+
+		<!-- 当前 TargetFramework 对应的 .NET 版本 -->
+		<_TargetNetVersion>
+			$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)'))
+		</_TargetNetVersion>
+
+		<!-- 实际使用的 .NET 版本（超过上限则回退） -->
+		<_EffectiveNetVersion Condition="$([MSBuild]::VersionGreaterThan('$(_TargetNetVersion)', '$(_MaxSupportedNetVersion)'))">
+			$(_MaxSupportedNetVersion)
+		</_EffectiveNetVersion>
+
+		<_EffectiveNetVersion Condition="$([MSBuild]::VersionLessThanOrEquals('$(_TargetNetVersion)', '$(_MaxSupportedNetVersion)'))">
+			$(_TargetNetVersion)
+		</_EffectiveNetVersion>
+	</PropertyGroup>
+
+	<ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+		<NativeFileReference
+		  Include="$(MSBuildThisFileDirectory)../runtimes/browser-wasm/nativeassets/net$(_EffectiveNetVersion)/libheif.a" />
+	</ItemGroup>
+
+	<ItemGroup  Condition="$(TargetFramework.Contains('-ios')) Or $(TargetFramework.StartsWith('Xamarin.iOS'))">
+		<NativeReference Include="$(MSBuildThisFileDirectory)../runtimes/$(RuntimeIdentifier)/native/libheif.a">
+			<Kind>Static</Kind>
+			<ForceLoad>true</ForceLoad>
+		</NativeReference>
+	</ItemGroup>
+</Project>

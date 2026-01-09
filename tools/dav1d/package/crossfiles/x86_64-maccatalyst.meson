@@ -1,0 +1,27 @@
+[binaries]
+c = ['clang', '-arch', 'x86_64', '-isysroot', '/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk']
+cpp = ['clang++', '-arch', 'x86_64', '-isysroot', '/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk']
+objc = ['clang', '-arch', 'x86_64', '-isysroot', '/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk']
+objcpp = ['clang++', '-arch', 'x86_64', '-isysroot', '/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk']
+ar = 'ar'
+strip = 'strip'
+
+[built-in options]
+c_args = ['--target=x86_64-apple-ios13.1-macabi']
+cpp_args = ['--target=x86_64-apple-ios13.1-macabi']
+c_link_args = ['--target=x86_64-apple-ios13.1-macabi']
+cpp_link_args = ['--target=x86_64-apple-ios13.1-macabi']
+objc_args = ['--target=x86_64-apple-ios13.1-macabi']
+objcpp_args = ['--target=x86_64-apple-ios13.1-macabi']
+
+[properties]
+root = '/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer'
+needs_exe_wrapper = true
+
+[host_machine]
+system = 'darwin'
+subsystem = 'ios'
+kernel = 'xnu'
+cpu_family = 'x86_64'
+cpu = 'x86_64'
+endian = 'little'

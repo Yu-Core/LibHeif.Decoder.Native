@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+	<metadata>
+		<id>LibHeif.Decoder.Native</id>
+		<version>$version$</version>
+		<authors>Yu-Core</authors>
+		<requireLicenseAcceptance>false</requireLicenseAcceptance>
+		<license type="file">LICENSE.txt</license>
+		<readme>README.md</readme>
+		<description>Native libheif binaries for .NET (Includes libde265 and dav1d)</description>
+		<projectUrl>https://github.com/Yu-Core/LibHeif.Decoder.Native</projectUrl>
+	</metadata>
+	<files>
+		<!-- Android -->
+		<file src="..\artifacts\android-arm64\lib\libheif.so" target="runtimes/android-arm64/native" />
+		<file src="..\artifacts\android-x64\lib\libheif.so" target="runtimes/android-x64/native" />
+
+		<!-- Windows -->
+		<file src="..\artifacts\windows-x64\bin\*.dll" target="runtimes/win-x64/native" />
+		<file src="..\artifacts\windows-arm64\bin\*.dll" target="runtimes/win-arm64/native" />
+
+		<!-- Linux -->
+		<file src="..\artifacts\linux-x64\lib\libheif.so" target="runtimes/linux-x64/native" />
+		<file src="..\artifacts\linux-arm64\lib\libheif.so" target="runtimes/linux-arm64/native" />
+
+		<!-- macOS (OSX) -->
+		<file src="..\artifacts\osx-x64\lib\libheif.dylib" target="runtimes/osx-x64/native" />
+		<file src="..\artifacts\osx-arm64\lib\libheif.dylib" target="runtimes/osx-arm64/native" />
+
+		<!-- iOS -->
+		<file src="..\artifacts\ios-arm64\lib\libheif.a" target="runtimes/ios-arm64/native" />
+		<file src="..\artifacts\iossimulator-x64\lib\libheif.a" target="runtimes/iossimulator-x64/native" />
+		<file src="..\artifacts\iossimulator-arm64\lib\libheif.a" target="runtimes/iossimulator-arm64/native" />
+
+		<!-- Mac Catalyst -->
+		<file src="..\artifacts\maccatalyst-x64\lib\libheif.dylib" target="runtimes/maccatalyst-x64/native" />
+		<file src="..\artifacts\maccatalyst-arm64\lib\libheif.dylib" target="runtimes/maccatalyst-arm64/native" />
+
+		<!-- Wasm -->
+		<file src="..\artifacts\browser-wasm\emscripten-3.1.7\lib\libheif.a" target="runtimes/browser-wasm/nativeassets/net6.0" />
+		<file src="..\artifacts\browser-wasm\emscripten-3.1.12\lib\libheif.a" target="runtimes/browser-wasm/nativeassets/net7.0" />
+		<file src="..\artifacts\browser-wasm\emscripten-3.1.34\lib\libheif.a" target="runtimes/browser-wasm/nativeassets/net8.0" />
+		<file src="..\artifacts\browser-wasm\emscripten-3.1.56\lib\libheif.a" target="runtimes/browser-wasm/nativeassets/net9.0" />
+		
+		<!-- 通用文件 -->
+		<file src="LibHeif.Decoder.Native.targets" target="buildTransitive/LibHeif.Decoder.Native.targets" />
+		<file src="_._" target="lib/netstandard2.0"/>
+		<file src="LICENSE.txt" target="" />
+		<file src="..\THIRD-PARTY-NOTICES.txt" target="" />
+		<file src="..\README.md" target="" />
+	</files>
+</package>

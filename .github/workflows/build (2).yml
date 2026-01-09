@@ -1,0 +1,108 @@
+name: Build LibHeif Native Nuget
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: 'Is it a pre release version?'
+        required: false
+        type: boolean
+
+jobs:
+  get-version:
+    runs-on: ubuntu-latest
+    outputs:
+      heif_version: ${{ steps.v.outputs.heif_version }}
+      de265_version: ${{ steps.v.outputs.de265_version }}
+      dav1d_version: ${{ steps.v.outputs.dav1d_version }}
+    steps:
+      - id: v
+        run: |
+          set -e
+
+          # 获取libheif最新版本
+          HEIF_TAG=$(curl -s https://api.github.com/repos/strukturag/libheif/releases/latest | jq -r .tag_name)
+          if [ -z "$HEIF_TAG" ] || [ "$HEIF_TAG" = "null" ]; then
+            echo "❌ Failed to get libheif version"
+            exit 1
+          fi
+          echo "heif_version=${HEIF_TAG}" >> $GITHUB_OUTPUT
+
+          # 获取libde265最新版本
+          DE265_TAG=$(curl -s https://api.github.com/repos/strukturag/libde265/releases/latest | jq -r .tag_name)
+          if [ -z "$DE265_TAG" ] || [ "$DE265_TAG" = "null" ]; then
+            echo "❌ Failed to get libde265 version"
+            exit 1
+          fi
+          echo "de265_version=${DE265_TAG}" >> $GITHUB_OUTPUT
+
+          # 获取dav1d最新版本
+          DAV1D_TAG=$(curl -s "https://code.videolan.org/api/v4/projects/videolan%2Fdav1d/releases?per_page=1" | jq -r '.[0].tag_name')
+          if [ -z "$DAV1D_TAG" ] || [ "$DAV1D_TAG" = "null" ]; then
+            echo "❌ Failed to get dav1d version"
+            exit 1
+          fi
+          echo "dav1d_version=${DAV1D_TAG}" >> $GITHUB_OUTPUT
+
+  build:
+    needs: get-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: browser, arch: wasm, EMSCRIPTEN_VERSION: 3.1.7,  runner: ubuntu-latest }
+          - { os: browser, arch: wasm, EMSCRIPTEN_VERSION: 3.1.12, runner: ubuntu-latest }
+
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout Source Code
+        run: |
+          git clone --depth 1 --branch ${{ needs.get-version.outputs.heif_version }} https://github.com/strukturag/libheif.git libheif
+          git clone --depth 1 --branch ${{ needs.get-version.outputs.de265_version }} https://github.com/strukturag/libde265.git libde265
+          git clone --depth 1 --branch ${{ needs.get-version.outputs.dav1d_version }} https://github.com/videolan/dav1d.git dav1d
+          
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Environment (Linux/Android)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake meson ninja-build nasm
+
+      - name: Setup Environment (Linux arm64)
+        if: matrix.os == 'linux' && matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Setup Environment (Android)
+        if: matrix.os == 'android'
+        run: |
+          echo "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+
+      - name: Setup Environment (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake meson ninja nasm
+          # 确保环境变量正确
+          echo "CPATH=/usr/local/include" >> $GITHUB_ENV
+
+      - name: Setup Environment (Emscripten)
+        if: matrix.os == 'browser' && matrix.arch == 'wasm'
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{matrix.EMSCRIPTEN_VERSION}}
+          
+      - name: Build with C# Driver
+        run: dotnet run --project Build/Build.csproj -- ${{ matrix.os }} ${{ matrix.arch }} ${{ matrix.EMSCRIPTEN_VERSION }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-${{ matrix.arch }}${{ matrix.EMSCRIPTEN_VERSION && format('-emscripten-{0}', matrix.EMSCRIPTEN_VERSION) || '' }}
+          path: artifacts/

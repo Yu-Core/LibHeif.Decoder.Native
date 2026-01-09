@@ -2,17 +2,99 @@ name: Build LibHeif Native Nuget
 
 on:
   workflow_dispatch:
+    inputs:
+      prerelease:
+        description: 'Is it a pre release version?'
+        required: false
+        type: boolean
 
 jobs:
   get-version:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.v.outputs.tag }}
+      heif_version: ${{ steps.v.outputs.heif_version }}
+      de265_version: ${{ steps.v.outputs.de265_version }}
+      dav1d_version: ${{ steps.v.outputs.dav1d_version }}
     steps:
       - id: v
         run: |
-          TAG=$(curl -s https://api.github.com/repos/strukturag/libheif/releases/latest | jq -r .tag_name)
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          set -e
+
+          # 获取libheif最新版本
+          HEIF_TAG=$(curl -s https://api.github.com/repos/strukturag/libheif/releases/latest | jq -r .tag_name)
+          if [ -z "$HEIF_TAG" ] || [ "$HEIF_TAG" = "null" ]; then
+            echo "❌ Failed to get libheif version"
+            exit 1
+          fi
+          echo "heif_version=${HEIF_TAG}" >> $GITHUB_OUTPUT
+
+          # 获取libde265最新版本
+          DE265_TAG=$(curl -s https://api.github.com/repos/strukturag/libde265/releases/latest | jq -r .tag_name)
+          if [ -z "$DE265_TAG" ] || [ "$DE265_TAG" = "null" ]; then
+            echo "❌ Failed to get libde265 version"
+            exit 1
+          fi
+          echo "de265_version=${DE265_TAG}" >> $GITHUB_OUTPUT
+
+          # 获取dav1d最新版本
+          DAV1D_TAG=$(curl -s "https://code.videolan.org/api/v4/projects/videolan%2Fdav1d/releases?per_page=1" | jq -r '.[0].tag_name')
+          if [ -z "$DAV1D_TAG" ] || [ "$DAV1D_TAG" = "null" ]; then
+            echo "❌ Failed to get dav1d version"
+            exit 1
+          fi
+          echo "dav1d_version=${DAV1D_TAG}" >> $GITHUB_OUTPUT
+
+  build-windows:
+    needs: get-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows, arch: x64, runner: windows-latest }
+          - { os: windows, arch: arm64, runner: windows-latest }
+    
+    runs-on: ${{ matrix.runner }}
+    env: 
+      triplet: ${{ matrix.arch }}-${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          cd vcpkg
+          .\bootstrap-vcpkg.bat
+        shell: pwsh
+        
+      - name: Install dependencies and build
+        run: |
+          # 依次安装，vcpkg 会处理好依赖顺序
+          ./vcpkg/vcpkg install libde265:${{ env.triplet }} dav1d:${{ env.triplet }} 
+          ./vcpkg/vcpkg install libheif:${{ env.triplet }} --overlay-ports=tools/vcpkg/overlay-ports/libheif
+        shell: pwsh
+
+      - name: Collect All DLLs
+        run: |
+          $artifactDir = "artifacts/${{ matrix.os }}-${{ matrix.arch }}/bin"
+          New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null
+          
+          $binPath = "vcpkg/installed/${{ env.triplet }}/bin"
+          if (Test-Path $binPath) {
+              # 复制 bin 目录下所有的 .dll 文件
+              Copy-Item "$binPath/*.dll" -Destination $artifactDir -Force
+              Write-Host "DLLs collected successfully from $binPath to $artifactDir"
+          } else {
+              Write-Error "Binary path not found: $binPath"
+              exit 1
+          }
+        shell: pwsh
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-${{ matrix.arch }}
+          path: artifacts/
 
   build:
     needs: get-version
@@ -20,62 +102,78 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: windows, arch: x64, runner: windows-2022 }
-          - { os: windows, arch: arm64, runner: windows-2022 }
-          - { os: linux, arch: x64, runner: ubuntu-24.04 }
-          - { os: linux, arch: arm64, runner: ubuntu-24.04 }
-          - { os: osx, arch: x64, runner: macos-13 }
-          - { os: osx, arch: arm64, runner: macos-14 }
-          - { os: ios, arch: arm64, runner: macos-14 }
-          - { os: ios, arch: x64, runner: macos-14 }
-          - { os: maccatalyst, arch: arm64, runner: macos-14 }
-          - { os: maccatalyst, arch: x64, runner: macos-14 }
-          - { os: android, arch: arm64, runner: ubuntu-24.04 }
-          - { os: android, arch: x64, runner: ubuntu-24.04 }
-          - { os: browser-wasm, arch: wasm, runner: ubuntu-24.04 }
+          - { os: linux, arch: x64, runner: ubuntu-latest }
+          - { os: linux, arch: arm64, runner: ubuntu-latest }
+          - { os: osx, arch: x64, runner: macos-15-intel }
+          - { os: osx, arch: arm64, runner: macos-15 }
+          - { os: ios, arch: arm64, runner: macos-15 }
+          - { os: iossimulator, arch: arm64, runner: macos-15 }
+          - { os: iossimulator, arch: x64, runner: macos-15 }
+          - { os: maccatalyst, arch: arm64, runner: macos-15 }
+          - { os: maccatalyst, arch: x64, runner: macos-15-intel }
+          - { os: android, arch: arm64, runner: ubuntu-latest }
+          - { os: android, arch: x64, runner: ubuntu-latest }
+          - { os: browser, arch: wasm, EMSCRIPTEN_VERSION: 3.1.7,  runner: ubuntu-latest }
+          - { os: browser, arch: wasm, EMSCRIPTEN_VERSION: 3.1.12, runner: ubuntu-latest }
+          - { os: browser, arch: wasm, EMSCRIPTEN_VERSION: 3.1.34, runner: ubuntu-latest }
+          - { os: browser, arch: wasm, EMSCRIPTEN_VERSION: 3.1.56, runner: ubuntu-latest }
 
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Checkout Source Code
         run: |
-          git clone --depth 1 --branch ${{ needs.get-version.outputs.version }} https://github.com/strukturag/libheif.git libheif
-          git clone --depth 1 --branch v1.0.15 https://github.com/strukturag/libde265.git libde265
-          git clone --depth 1 --branch 1.4.1 https://code.videolan.org/videolan/dav1d.git dav1d
-
-      - name: Setup Environment (Linux/Android)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake meson ninja-build nasm gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-
-      - name: Setup Environment (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          pip install meson ninja
-          choco install nasm
-
-      - name: Setup Environment (WASM)
-        if: matrix.os == 'browser-wasm'
-        uses: mymindstorm/setup-emsdk@v14
-
+          git clone --depth 1 --branch ${{ needs.get-version.outputs.heif_version }} https://github.com/strukturag/libheif.git libheif
+          git clone --depth 1 --branch ${{ needs.get-version.outputs.de265_version }} https://github.com/strukturag/libde265.git libde265
+          git clone --depth 1 --branch ${{ needs.get-version.outputs.dav1d_version }} https://github.com/videolan/dav1d.git dav1d
+          
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
+      - name: Setup Environment (Linux/Android)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake meson ninja-build nasm
+
+      - name: Setup Environment (Linux arm64)
+        if: matrix.os == 'linux' && matrix.arch == 'arm64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Setup Environment (Android)
+        if: matrix.os == 'android'
+        run: |
+          echo "$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+
+      - name: Setup Environment (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake meson ninja nasm
+          # 确保环境变量正确
+          echo "CPATH=/usr/local/include" >> $GITHUB_ENV
+
+      - name: Setup Environment (Emscripten)
+        if: matrix.os == 'browser' && matrix.arch == 'wasm'
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{matrix.EMSCRIPTEN_VERSION}}
+          
       - name: Build with C# Driver
-        run: dotnet run --project BuildDriver/BuildDriver.csproj -- ${{ matrix.os }} ${{ matrix.arch }}
+        run: dotnet run --project Build/Build.csproj -- ${{ matrix.os }} ${{ matrix.arch }} ${{ matrix.EMSCRIPTEN_VERSION }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.os }}-${{ matrix.arch }}
+          name: ${{ matrix.os }}-${{ matrix.arch }}${{ matrix.EMSCRIPTEN_VERSION && format('-emscripten-{0}', matrix.EMSCRIPTEN_VERSION) || '' }}
           path: artifacts/
 
   pack-nuget:
-    needs: [build, get-version]
+    needs: [build, build-windows, get-version]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -83,45 +181,46 @@ jobs:
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts_raw
+          path: artifacts
+          merge-multiple: true
 
-      - name: Organize Artifacts
-        shell: pwsh
+      - name: Generate THIRD-PARTY-NOTICES.txt
+        shell: bash
         run: |
-          # 创建统一的 artifacts 目录结构供 nuspec 使用
-          New-Item -ItemType Directory -Force -Path artifacts
-          
-          # 遍历所有下载的目录并移动到对应的结构中
-          # artifacts_raw/windows-x64/windows-x64/bin/... -> artifacts/windows-x64/bin/...
-          Get-ChildItem artifacts_raw | ForEach-Object {
-              $dirName = $_.Name
-              Write-Host "Processing $dirName..."
-              $targetDir = Join-Path "artifacts" $dirName
-              if (-not (Test-Path $targetDir)) { New-Item -ItemType Directory -Force -Path $targetDir }
-              
-              # 移动内容
-              Copy-Item -Path "artifacts_raw/$dirName/*" -Destination $targetDir -Recurse -Force
-          }
-          
-          # 检查关键文件是否存在 (调试用)
-          Test-Path "artifacts/windows-x64/bin/heif.dll"
+          chmod +x scripts/generate-third-party-notices.sh
+          ./scripts/generate-third-party-notices.sh
 
       - name: Setup NuGet
-        uses: NuGet/setup-nuget@v1
+        uses: NuGet/setup-nuget@v2
 
       - name: Pack NuGet Package
         shell: pwsh
         run: |
           # 移除版本号中的 'v' 前缀 (如 v1.17.6 -> 1.17.6)
-          $CleanVersion = "${{ needs.get-version.outputs.version }}".Replace("v", "")
+          $BaseVersion = "${{ needs.get-version.outputs.heif_version }}".Replace("v", "")
+
+          $IsPrerelease = "${{ github.event.inputs.prerelease }}" -eq "true"
+
+          if ($IsPrerelease) {
+              $Date = Get-Date -Format "yyyyMMddHHmmss"
+              $Version = "$BaseVersion-beta$Date"
+          }
+          else {
+              $Version = $BaseVersion
+          }
+
+          Write-Host "Packing NuGet version: $Version"
+
+          # 写入 GitHub Actions 环境变量
+          "NupkgVersion=$Version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           
-          nuget pack nuget/LibHeif.Native.nuspec `
-            -Version $CleanVersion `
-            -Properties "version=$CleanVersion" `
+          nuget pack nuget/LibHeif.Decoder.Native.nuspec `
+            -Version $Version `
             -OutputDirectory .
 
       - name: Upload Final Nuget
         uses: actions/upload-artifact@v4
         with:
-          name: LibHeif.Native.${{ needs.get-version.outputs.version }}.nupkg
+          name: LibHeif.Decoder.Native.${{ env.NupkgVersion }}.nupkg
           path: "*.nupkg"
+
