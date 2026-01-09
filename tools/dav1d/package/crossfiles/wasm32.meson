@@ -10,6 +10,7 @@ c_link_args = ['-sEXPORT_ALL=1']
 
 [properties]
 needs_exe_wrapper = true
+skip_sanity_check = true
 
 [host_machine]
 system = 'emscripten'
