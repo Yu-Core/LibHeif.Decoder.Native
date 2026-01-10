@@ -38,6 +38,8 @@ class Program
 
         // 3. Build libheif (Dynamic, linking others statically)
         BuildLibHeif(targetOs, arch, buildDir, installDir, depInstallDir);
+
+        CopyStaticLibraries(targetOs, arch, installDir, depInstallDir);
     }
 
     static void BuildLibde265(string os, string arch, string buildDir, string installDir)
@@ -153,7 +155,7 @@ class Program
         {
             cmakeArgs += @" 
                 -DENABLE_MULTITHREADING_SUPPORT=OFF
-                -DCMAKE_CXX_FLAGS=""-s ALLOW_MEMORY_GROWTH=1""";
+                -DCMAKE_CXX_FLAGS=""-sALLOW_MEMORY_GROWTH=1""";
         }
 
         if ($"{os}-{arch}" == "browser-wasm")
@@ -168,8 +170,6 @@ class Program
         RunProcess("cmake", "--build . --config Release --target install --parallel 4", bDir);
 
         StripBinary(os, arch, installDir);
-
-        MergeStaticLibraries(os, arch, installDir, depDir, bDir);
     }
 
     static string GetCMakeBaseArgs(string os, string arch, string installDir)
@@ -359,37 +359,21 @@ class Program
         return ("strip", "-x");
     }
 
-    static void MergeStaticLibraries(string os, string arch, string installDir, string depDir, string buildDir)
+    static void CopyStaticLibraries(string os, string arch, string installDir, string depDir)
     {
         if (os != "ios" && os != "iossimulator" && $"{os}-{arch}" != "browser-wasm")
         {
             return;
         }
 
-        // 定义输入输出路径
-        string libHeif = Path.Combine(installDir, "lib/libheif.a");
         string libDe265 = Path.Combine(depDir, "lib/libde265.a");
         string libDav1d = Path.Combine(depDir, "lib/libdav1d.a");
-        string outputLib = Path.Combine(installDir, "lib/libheif_combined.a");
+        string newlibDe265 = Path.Combine(installDir, "lib/libde265.a");
+        string newlibDav1d = Path.Combine(installDir, "lib/libdav1d.a");
 
-        if (os == "ios" || os == "iossimulator")
-        {
-            // 构造 libtool 参数
-            // -static: 创建静态库
-            // -o: 指定输出路径
-            string arguments = $"-static -o \"{outputLib}\" \"{libDe265}\" \"{libDav1d}\" \"{libHeif}\"";
-            RunProcess("/usr/bin/libtool", arguments, buildDir);
-        }
+        File.Copy(libDe265, newlibDe265, true);
+        File.Copy(libDav1d, newlibDav1d, true);
 
-        if ($"{os}-{arch}" == "browser-wasm")
-        {
-            string arguments = $"-rcs \"{outputLib}\" \"{libDe265}\" \"{libDav1d}\" \"{libHeif}\"";
-            RunProcess("emar", arguments, buildDir);
-        }
-
-        Console.WriteLine("Static libraries merged successfully.");
-        // 替换原有的 libheif.a
-        File.Delete(libHeif);
-        File.Move(outputLib, libHeif);
+        Console.WriteLine("Static libraries copy successfully.");
     }
 }

@@ -1,29 +1,38 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 	<PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
 		<!-- 允许的最高 .NET 版本（clamp 上限） -->
-		<_MaxSupportedNetVersion>9.0</_MaxSupportedNetVersion>
+		<_LibHeifMaxSupportedNetVersion>10.0</_LibHeifMaxSupportedNetVersion>
 
 		<!-- 当前 TargetFramework 对应的 .NET 版本 -->
-		<_TargetNetVersion>
-			$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)'))
-		</_TargetNetVersion>
+		<_LibHeifTargetNetVersion>$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)'))</_LibHeifTargetNetVersion>
 
 		<!-- 实际使用的 .NET 版本（超过上限则回退） -->
-		<_EffectiveNetVersion Condition="$([MSBuild]::VersionGreaterThan('$(_TargetNetVersion)', '$(_MaxSupportedNetVersion)'))">
-			$(_MaxSupportedNetVersion)
-		</_EffectiveNetVersion>
+		<_LibHeifEffectiveNetVersion Condition="$([MSBuild]::VersionGreaterThan('$(_LibHeifTargetNetVersion)', '$(_LibHeifMaxSupportedNetVersion)'))">$(_LibHeifMaxSupportedNetVersion)</_LibHeifEffectiveNetVersion>
+		<_LibHeifEffectiveNetVersion Condition="$([MSBuild]::VersionLessThanOrEquals('$(_LibHeifTargetNetVersion)', '$(_LibHeifMaxSupportedNetVersion)'))">$(_LibHeifTargetNetVersion)</_LibHeifEffectiveNetVersion>
 
-		<_EffectiveNetVersion Condition="$([MSBuild]::VersionLessThanOrEquals('$(_TargetNetVersion)', '$(_MaxSupportedNetVersion)'))">
-			$(_TargetNetVersion)
-		</_EffectiveNetVersion>
+		<!-- 设置对应的 Emscripten 版本 -->
+		<_LibHeifEmscriptenVersion Condition="'$(_LibHeifEffectiveNetVersion)' == '6.0'">3.1.7</_LibHeifEmscriptenVersion>
+		<_LibHeifEmscriptenVersion Condition="'$(_LibHeifEffectiveNetVersion)' == '7.0'">3.1.12</_LibHeifEmscriptenVersion>
+		<_LibHeifEmscriptenVersion Condition="'$(_LibHeifEffectiveNetVersion)' == '8.0'">3.1.34</_LibHeifEmscriptenVersion>
+		<_LibHeifEmscriptenVersion Condition="'$(_LibHeifEffectiveNetVersion)' == '9.0'">3.1.56</_LibHeifEmscriptenVersion>
+		<_LibHeifEmscriptenVersion Condition="'$(_LibHeifEffectiveNetVersion)' == '10.0'">3.1.56</_LibHeifEmscriptenVersion>
 	</PropertyGroup>
 
 	<ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
-		<NativeFileReference
-		  Include="$(MSBuildThisFileDirectory)../runtimes/browser-wasm/nativeassets/net$(_EffectiveNetVersion)/libheif.a" />
+		<NativeFileReference Include="$(MSBuildThisFileDirectory)../runtimes/browser-wasm/nativeassets/emscripten-$(_LibHeifEmscriptenVersion)/libde265.a" />
+		<NativeFileReference Include="$(MSBuildThisFileDirectory)../runtimes/browser-wasm/nativeassets/emscripten-$(_LibHeifEmscriptenVersion)/libdav1d.a" />
+		<NativeFileReference Include="$(MSBuildThisFileDirectory)../runtimes/browser-wasm/nativeassets/emscripten-$(_LibHeifEmscriptenVersion)/libheif.a" />
 	</ItemGroup>
 
 	<ItemGroup  Condition="$(TargetFramework.Contains('-ios')) Or $(TargetFramework.StartsWith('Xamarin.iOS'))">
+		<NativeReference Include="$(MSBuildThisFileDirectory)../runtimes/$(RuntimeIdentifier)/native/libde265.a">
+			<Kind>Static</Kind>
+			<ForceLoad>true</ForceLoad>
+		</NativeReference>
+		<NativeReference Include="$(MSBuildThisFileDirectory)../runtimes/$(RuntimeIdentifier)/native/libdav1d.a">
+			<Kind>Static</Kind>
+			<ForceLoad>true</ForceLoad>
+		</NativeReference>
 		<NativeReference Include="$(MSBuildThisFileDirectory)../runtimes/$(RuntimeIdentifier)/native/libheif.a">
 			<Kind>Static</Kind>
 			<ForceLoad>true</ForceLoad>
