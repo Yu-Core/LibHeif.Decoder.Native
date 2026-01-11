@@ -141,6 +141,7 @@ class Program
             -DDAV1D_INCLUDE_DIR=""{includeDir}""
             ";
 
+        // 构建静态库 ios iossimulator browser-wasm
         if (os == "ios" || os == "iossimulator" || $"{os}-{arch}" == "browser-wasm")
         {
             cmakeArgs += @" -DBUILD_SHARED_LIBS=OFF";
@@ -155,7 +156,8 @@ class Program
         {
             cmakeArgs += @" 
                 -DENABLE_MULTITHREADING_SUPPORT=OFF
-                -DCMAKE_CXX_FLAGS=""-sALLOW_MEMORY_GROWTH=1""";
+                -DCMAKE_C_FLAGS=""-D__EMSCRIPTEN_STANDALONE_WASM__=1""
+                -DCMAKE_CXX_FLAGS=""-D__EMSCRIPTEN_STANDALONE_WASM__=1""";
         }
 
         if ($"{os}-{arch}" == "browser-wasm")
